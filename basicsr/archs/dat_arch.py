@@ -561,7 +561,7 @@ class DATB(nn.Module):
         Output: x: (B, H*W, C)
         """        
         H , W = x_size
-        x = x + self.drop_path(self.attn(self.norm1(x), H, W))
+        x = x + self.drop_path(self.attn(self.norm1(x), H, W))  # x > norm1 > x = att(x) + x > norm2 > x = ffn(x) + x
         x = x + self.drop_path(self.ffn(self.norm2(x), H, W))
 
         return x
@@ -776,22 +776,22 @@ class DAT(nn.Module):
         self.layers = nn.ModuleList()
         for i in range(self.num_layers):
             layer = ResidualGroup(
-                dim=embed_dim,
-                num_heads=heads[i],
-                reso=img_size,
-                split_size=split_size,
-                expansion_factor=expansion_factor,
-                qkv_bias=qkv_bias,
-                qk_scale=qk_scale,
-                drop=drop_rate,
-                attn_drop=attn_drop_rate,
-                drop_paths=dpr[sum(depth[:i]):sum(depth[:i + 1])],
-                act_layer=act_layer,
-                norm_layer=norm_layer,
-                depth=depth[i],
-                use_chk=use_chk,
-                resi_connection=resi_connection,
-                rg_idx=i)
+                dim=embed_dim, # embed_dim=180
+                num_heads=heads[i], # num_heads=[2,2,2,2]
+                reso=img_size, # img_size=64
+                split_size=split_size, # split_size=[2,4],
+                expansion_factor=expansion_factor, # expansion_factor=4.
+                qkv_bias=qkv_bias, # True
+                qk_scale=qk_scale, # None
+                drop=drop_rate, # 0
+                attn_drop=attn_drop_rate, # 0
+                drop_paths=dpr[sum(depth[:i]):sum(depth[:i + 1])], #
+                act_layer=act_layer, # GELU
+                norm_layer=norm_layer, # LN
+                depth=depth[i], # [2,2,2,2,2,2]
+                use_chk=use_chk, # FALSE
+                resi_connection=resi_connection, # 1conv
+                rg_idx=i) #
             self.layers.append(layer)
 
         self.norm = norm_layer(curr_dim)
