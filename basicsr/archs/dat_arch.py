@@ -303,14 +303,14 @@ class Adaptive_Spatial_Attention(nn.Module):
             nn.BatchNorm2d(dim),
             nn.GELU()
         )
-        self.channel_interaction = nn.Sequential(
+        self.channel_interaction = nn.Sequential(  # CI, dim // 8 to dim
             nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(dim, dim // 8, kernel_size=1),
             nn.BatchNorm2d(dim // 8),
             nn.GELU(),
             nn.Conv2d(dim // 8, dim, kernel_size=1),
         )
-        self.spatial_interaction = nn.Sequential(
+        self.spatial_interaction = nn.Sequential(  # SI, dim // 16 to 1
             nn.Conv2d(dim, dim // 16, kernel_size=1),
             nn.BatchNorm2d(dim // 16),
             nn.GELU(),
