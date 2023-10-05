@@ -282,8 +282,8 @@ class Adaptive_Spatial_Attention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(drop)
 
-        self.attns = nn.ModuleList([
-                Spatial_Attention(
+        self.attns = nn.ModuleList([ 
+                Spatial_Attention(  # Spatial Window Self-Attention
                     dim//2, idx = i,
                     split_size=split_size, num_heads=num_heads//2, dim_out=dim//2,
                     qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop, position_bias=True)
@@ -298,7 +298,7 @@ class Adaptive_Spatial_Attention(nn.Module):
             self.register_buffer("attn_mask_0", None)
             self.register_buffer("attn_mask_1", None)
         
-        self.dwconv = nn.Sequential(
+        self.dwconv = nn.Sequential(  # depth-wise convolution
             nn.Conv2d(dim, dim, kernel_size=3, stride=1, padding=1,groups=dim),
             nn.BatchNorm2d(dim),
             nn.GELU()
@@ -372,17 +372,17 @@ class Adaptive_Spatial_Attention(nn.Module):
 
         qkv = self.qkv(x).reshape(B, -1, 3, C).permute(2, 0, 1, 3) # 3, B, HW, C
         # V without partition
-        v = qkv[2].transpose(-2,-1).contiguous().view(B, C, H, W)
+        v = qkv[2].transpose(-2,-1).contiguous().view(B, C, H, W) # 3 x  [B, HW, C] > 1 x [B, HW, C] > [B, C, HW] > B, C, H, W, get v
 
         # image padding
-        max_split_size = max(self.split_size[0], self.split_size[1])
-        pad_l = pad_t = 0
-        pad_r = (max_split_size - W % max_split_size) % max_split_size
-        pad_b = (max_split_size - H % max_split_size) % max_split_size
+        max_split_size = max(self.split_size[0], self.split_size[1])  # split_size (tuple(int)): Height and Width of spatial window
+        pad_l = pad_t = 0  # left, top padding 0
+        pad_r = (max_split_size - W % max_split_size) % max_split_size  # right padding size
+        pad_b = (max_split_size - H % max_split_size) % max_split_size  # bottom padding size
 
         qkv = qkv.reshape(3*B, H, W, C).permute(0, 3, 1, 2) # 3B C H W
         qkv = F.pad(qkv, (pad_l, pad_r, pad_t, pad_b)).reshape(3, B, C, -1).transpose(-2, -1) # l r t b
-        _H = pad_b + H
+        _H = pad_b + H  # padded_tensor size
         _W = pad_r + W
         _L = _H * _W
 
@@ -390,7 +390,7 @@ class Adaptive_Spatial_Attention(nn.Module):
         # shift in block: (0, 4, 8, ...), (2, 6, 10, ...), (0, 4, 8, ...), (2, 6, 10, ...), ...
         if (self.rg_idx % 2 == 0 and self.b_idx  > 0 and (self.b_idx  - 2) % 4 == 0) or (self.rg_idx % 2 != 0 and self.b_idx  % 4 == 0):
             qkv = qkv.view(3, B, _H, _W, C)
-            qkv_0 = torch.roll(qkv[:,:,:,:,:C//2], shifts=(-self.shift_size[0], -self.shift_size[1]), dims=(2, 3))
+            qkv_0 = torch.roll(qkv[:,:,:,:,:C//2], shifts=(-self.shift_size[0], -self.shift_size[1]), dims=(2, 3))  # 用于沿指定维度将张量中的元素进行循环滚动
             qkv_0 = qkv_0.view(3, B, _L, C//2)
             qkv_1 = torch.roll(qkv[:,:,:,:,C//2:], shifts=(-self.shift_size[1], -self.shift_size[0]), dims=(2, 3))
             qkv_1 = qkv_1.view(3, B, _L, C//2)
@@ -421,10 +421,10 @@ class Adaptive_Spatial_Attention(nn.Module):
 
         # Adaptive Interaction Module (AIM)
         # C-Map (before sigmoid)
-        channel_map = self.channel_interaction(conv_x).permute(0, 2, 3, 1).contiguous().view(B, 1, C)
+        channel_map = self.channel_interaction(conv_x).permute(0, 2, 3, 1).contiguous().view(B, 1, C)  # CA like
         # S-Map (before sigmoid)
         attention_reshape = attened_x.transpose(-2,-1).contiguous().view(B, C, H, W)
-        spatial_map = self.spatial_interaction(attention_reshape)
+        spatial_map = self.spatial_interaction(attention_reshape)  # SA like
 
         # C-I
         attened_x = attened_x * torch.sigmoid(channel_map)
